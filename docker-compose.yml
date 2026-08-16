@@ -1,0 +1,21 @@
+services:
+  gpn-bot:
+    build: .
+    image: gpn-bot:latest
+    container_name: gpn-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      STATE_FILE: /app/data/state.json
+      TZ: Europe/Moscow
+    volumes:
+      - gpn-bot-data:/app/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  gpn-bot-data:
