@@ -1,4 +1,4 @@
-import { config, cooldownMs, staleAlertMs } from './config.js';
+import { config, staleAlertMs } from './config.js';
 import { fetchStations } from './gpn.js';
 import { getFuelState, getState, save } from './state.js';
 import { log } from './logger.js';
@@ -124,24 +124,13 @@ export class Tracker {
 
         if (value === fs.confirmed) continue;
 
-        // Реагируем на первое же расхождение: при дефиците топливо разбирают за минуты,
-        // и уведомление, отложенное до подтверждения, приходит уже бесполезным.
+        // Любое расхождение уходит подписчикам немедленно: при дефиците топливо
+        // разбирают за минуты, так что придерживать сообщения смысла нет.
         fs.confirmed = value;
         fs.changedAt = now;
 
         const direction = value ? 'appeared' : 'gone';
         if (direction === 'gone' && !config.notifyOnGone) continue;
-
-        // Появление шлём всегда. Cooldown придерживает только «закончилось»:
-        // пропущенное «появилось» стоит дороже лишнего сообщения.
-        if (direction === 'gone') {
-          const lastNotified = fs.notifiedAt.gone || 0;
-          if (now - lastNotified < cooldownMs) {
-            log.info(`Уведомление подавлено (cooldown): АЗС ${stationId} / топливо ${fuelId} / gone`);
-            continue;
-          }
-        }
-        fs.notifiedAt[direction] = now;
 
         events.push({
           station,

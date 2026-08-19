@@ -50,9 +50,6 @@ function build() {
   pollIntervalSec: num('POLL_INTERVAL_SEC', 420, { min: 60, max: 86400 }),
   pollJitterPct: num('POLL_JITTER_PCT', 10, { min: 0, max: 50 }),
 
-  // Пауза между повторными уведомлениями «закончилось». На «появилось» не влияет —
-  // такие сообщения уходят всегда и сразу.
-  notifyCooldownMin: num('NOTIFY_COOLDOWN_MIN', 30, { min: 0, max: 1440 }),
   notifyOnGone: bool('NOTIFY_ON_GONE', true),
 
   // Если API молчит дольше этого времени — предупреждаем, что данные протухли.
@@ -76,5 +73,4 @@ try {
 }
 
 export const config = parsed;
-export const cooldownMs = config.notifyCooldownMin * 60_000;
 export const staleAlertMs = config.staleAlertMin * 60_000;
