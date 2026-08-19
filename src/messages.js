@@ -84,12 +84,7 @@ export function formatStatus(snapshot) {
       const live = station.oils.get(fuelId);
       const fs = getFuelState(stationId, fuelId);
       const since = fs.changedAt ? ` <i>(${agoRu(fs.changedAt)})</i>` : '';
-      let line = `  ${live ? '✅' : '❌'} <b>${esc(title)}</b> — ${live ? 'есть' : 'нет'}${since}`;
-      // Значение уже изменилось, но ещё не набрало нужное число подтверждений.
-      if (fs.candidate !== null && fs.candidate !== undefined && fs.candidate !== fs.confirmed) {
-        line += ` <i>· ожидает подтверждения → ${fs.candidate ? 'есть' : 'нет'} (${fs.candidateCount}/${config.confirmPolls})</i>`;
-      }
-      lines.push(line);
+      lines.push(`  ${live ? '✅' : '❌'} <b>${esc(title)}</b> — ${live ? 'есть' : 'нет'}${since}`);
     }
     lines.push('');
   }
@@ -129,9 +124,10 @@ export function formatHelp() {
     '/find &lt;запрос&gt; — найти АЗС по городу или адресу (чтобы добавить её id в конфиг)',
     '/help — эта справка',
     '',
-    `Уведомление приходит, когда топливо появляется${config.notifyOnGone ? ' или заканчивается' : ''}. ` +
-      `Изменение подтверждается ${config.confirmPolls} опросами подряд, ` +
-      `повтор не чаще раза в ${config.notifyCooldownMin} мин — чтобы не ловить дребезг.`,
+    `О появлении топлива сообщаю сразу, на первом же опросе, где оно есть.` +
+      (config.notifyOnGone
+        ? ` Об окончании — тоже, но не чаще раза в ${config.notifyCooldownMin} мин.`
+        : ''),
   ].join('\n');
 }
 

@@ -50,9 +50,8 @@ function build() {
   pollIntervalSec: num('POLL_INTERVAL_SEC', 420, { min: 60, max: 86400 }),
   pollJitterPct: num('POLL_JITTER_PCT', 10, { min: 0, max: 50 }),
 
-  // Сколько опросов подряд должны показать новое значение, прежде чем мы ему поверим.
-  // Флаги наличия дребезжат, 2 опроса отсекают одиночные всплески (см. RESEARCH.md).
-  confirmPolls: num('CONFIRM_POLLS', 2, { min: 1, max: 10 }),
+  // Пауза между повторными уведомлениями «закончилось». На «появилось» не влияет —
+  // такие сообщения уходят всегда и сразу.
   notifyCooldownMin: num('NOTIFY_COOLDOWN_MIN', 30, { min: 0, max: 1440 }),
   notifyOnGone: bool('NOTIFY_ON_GONE', true),
 

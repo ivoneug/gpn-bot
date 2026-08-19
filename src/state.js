@@ -6,7 +6,7 @@ import { log } from './logger.js';
 const EMPTY = {
   version: 1,
   subscribers: [],
-  fuelState: {}, // "<stationId>:<fuelId>" -> { confirmed, candidate, candidateCount, changedAt, notifiedAt }
+  fuelState: {}, // "<stationId>:<fuelId>" -> { confirmed, changedAt, notifiedAt }
   lastPollAt: 0,
   lastPollOk: null,
   lastSuccessAt: 0,
@@ -28,8 +28,6 @@ export function getFuelState(stationId, fuelId) {
   if (!state.fuelState[key]) {
     state.fuelState[key] = {
       confirmed: null, // null = ещё не знаем (первый опрос задаёт базовую линию без уведомления)
-      candidate: null,
-      candidateCount: 0,
       changedAt: 0,
       notifiedAt: { appeared: 0, gone: 0 },
     };

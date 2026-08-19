@@ -122,40 +122,24 @@ export class Tracker {
           continue;
         }
 
-        if (value === fs.confirmed) {
-          fs.candidate = null;
-          fs.candidateCount = 0;
-          continue;
-        }
+        if (value === fs.confirmed) continue;
 
-        // Значение разошлось с подтверждённым — ждём подтверждения несколькими опросами подряд.
-        if (fs.candidate === value) fs.candidateCount += 1;
-        else {
-          fs.candidate = value;
-          fs.candidateCount = 1;
-        }
-        if (fs.candidateCount < config.confirmPolls) {
-          log.debug(
-            `АЗС ${stationId} / топливо ${fuelId}: кандидат ${value}, ` +
-              `${fs.candidateCount}/${config.confirmPolls} подтверждений`,
-          );
-          continue;
-        }
-
+        // Реагируем на первое же расхождение: при дефиците топливо разбирают за минуты,
+        // и уведомление, отложенное до подтверждения, приходит уже бесполезным.
         fs.confirmed = value;
-        fs.candidate = null;
-        fs.candidateCount = 0;
         fs.changedAt = now;
 
         const direction = value ? 'appeared' : 'gone';
         if (direction === 'gone' && !config.notifyOnGone) continue;
 
-        const lastNotified = fs.notifiedAt[direction] || 0;
-        if (now - lastNotified < cooldownMs) {
-          log.info(
-            `Уведомление подавлено (cooldown): АЗС ${stationId} / топливо ${fuelId} / ${direction}`,
-          );
-          continue;
+        // Появление шлём всегда. Cooldown придерживает только «закончилось»:
+        // пропущенное «появилось» стоит дороже лишнего сообщения.
+        if (direction === 'gone') {
+          const lastNotified = fs.notifiedAt.gone || 0;
+          if (now - lastNotified < cooldownMs) {
+            log.info(`Уведомление подавлено (cooldown): АЗС ${stationId} / топливо ${fuelId} / gone`);
+            continue;
+          }
         }
         fs.notifiedAt[direction] = now;
 
