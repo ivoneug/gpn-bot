@@ -14,6 +14,40 @@ const FALLBACK_FUELS = {
   541: 'ДТ Опти', 100032: 'G-100', 100036: 'АИ-100',
 };
 
+// Сокращения для длинных трассовых адресов — в том же виде, что в RESEARCH.md.
+// \b в JS не работает с кириллицей, поэтому границу слова задаём через \p{L}:
+// иначе "граница" после дефиса ("Кропоткин-граница") не попадёт под замену.
+const ABBREVIATIONS = [
+  [/(?<!\p{L})граница(?!\p{L})/gu, 'гр.'],
+  [/(?<!\p{L})края(?!\p{L})/gu, 'кр.'],
+  [/(?<!\p{L})области(?!\p{L})/gu, 'обл.'],
+];
+
+/**
+ * Адреса приходят неряшливыми: двойные пробелы, пробелы вокруг дефисов,
+ * номер дома вплотную к запятой. Пример из жизни (АЗС №10):
+ * "Краснодар - Кропоткин - граница Ставропольского края  (3 км слева),1".
+ */
+function cleanAddress(raw) {
+  let s = String(raw ?? '').replace(/\s+/g, ' ').trim();
+  s = s.replace(/\s*-\s*/g, '-').replace(/\s*,\s*/g, ', ');
+  for (const [re, to] of ABBREVIATIONS) s = s.replace(re, to);
+  // У трассовых АЗС за скобкой с километром идёт номер дома — в сообщении он лишний.
+  s = s.replace(/\)\s*,\s*\d+[а-я]?(\/\d+)?$/iu, ')');
+  return s.trim();
+}
+
+/**
+ * Приводит названия топлива к одному виду. API отдаёт shortTitle голым числом
+ * ("92"), а title — с приставкой ("Бензин АИ-92"); в сообщениях хотим "АИ-92".
+ * Брендированные (G-95) и дизельные (ДТл) названия остаются как есть.
+ */
+function normalizeFuelTitle(raw) {
+  const s = String(raw ?? '').replace(/\s+/g, ' ').trim();
+  if (/^\d+$/.test(s)) return `АИ-${s}`;
+  return s.replace(/^Бензин\s+/iu, '');
+}
+
 function normalizeStation(raw) {
   // Когда данных по АЗС нет, бэкенд отдаёт oils пустым массивом, а не объектом.
   const oilsRaw = raw.oils && !Array.isArray(raw.oils) ? raw.oils : {};
@@ -27,7 +61,9 @@ function normalizeStation(raw) {
     number: String(raw.PNPONumber ?? '').trim(),
     name: String(raw.name ?? '').trim(),
     city: String(raw.city ?? '').trim(),
-    address: String(raw.address ?? '').trim(),
+    address: cleanAddress(raw.address),
+    // Исходный адрес — чтобы /find находил и по неподрезанному написанию.
+    rawAddress: String(raw.address ?? '').trim(),
     latitude: raw.latitude,
     longitude: raw.longitude,
     workMode: raw.workMode ?? null,
@@ -99,7 +135,8 @@ export async function fetchStations({ timeoutMs = 30_000, retries = 2 } = {}) {
 
       const fuels = new Map();
       for (const p of Array.isArray(data.oilProducts) ? data.oilProducts : []) {
-        if (Number.isInteger(p?.id)) fuels.set(p.id, p.shortTitle || p.title || String(p.id));
+        if (!Number.isInteger(p?.id)) continue;
+        fuels.set(p.id, normalizeFuelTitle(p.shortTitle || p.title) || String(p.id));
       }
       for (const [id, title] of Object.entries(FALLBACK_FUELS)) {
         if (!fuels.has(Number(id))) fuels.set(Number(id), title);

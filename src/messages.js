@@ -136,7 +136,7 @@ export function formatFind(snapshot, query) {
 
   const found = [];
   for (const station of snapshot.stations.values()) {
-    const haystack = `${station.city} ${station.address} ${station.number}`.toLowerCase();
+    const haystack = `${station.city} ${station.address} ${station.rawAddress} ${station.number}`.toLowerCase();
     if (haystack.includes(q)) found.push(station);
     if (found.length >= 30) break;
   }
