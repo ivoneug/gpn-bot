@@ -134,9 +134,12 @@ sudo docker compose up -d --build'
 **Docker требует `sudo`.** Пользователь `orangepi` не в группе `docker` (добавлять не стали:
 членство в этой группе равносильно root). `sudo` тоже спрашивает пароль — обёртка отвечает и ему.
 
-**При захвате вывода в файл** помни про два артефакта: expect отдаёт строки с `\r`
-(лечится `| tr -d '\r'`), а приглашение `[sudo] password for orangepi:` попадает в stdout.
-Для JSON вырезай тело: `sed -n '/^{/,/^}/p'`.
+**При захвате вывода в файл** мусор липнет с обеих сторон: expect отдаёт строки с `\r`
+(лечится `| tr -d '\r'`), приглашение `[sudo] password for orangepi:` попадает в stdout,
+а в конце ssh дописывает `Connection to ... closed.` — причём **вплотную к последнему символу**,
+если вывод не заканчивался переводом строки. Из-за этого `sed -n '/^{/,/^}/p'` для JSON
+не спасает: последняя строка станет `}Connection to 192.168.1.123 closed.`. Разбирай
+через `raw_decode`, он игнорирует хвост (см. раздел «Чтение состояния»).
 
 **Удалённые команды без `-t`** не смогут выполнить `sudo` вообще — прокидывай `-t` всегда,
 даже когда кажется, что tty не нужен.
@@ -159,8 +162,11 @@ sudo docker compose up -d --build'
 ## Чтение состояния
 
 ```bash
-"$SCRATCHPAD/sshx" ssh -t orangepi@192.168.1.123 'cd ~/gpn-bot && sudo docker compose exec -T gpn-bot cat /app/data/state.json' 2>&1 | tr -d '\r' | sed -n '/^{/,/^}/p'
+"$SCRATCHPAD/sshx" ssh -t orangepi@192.168.1.123 'cd ~/gpn-bot && sudo docker compose exec -T gpn-bot cat /app/data/state.json' 2>&1 | tr -d '\r' | python3 -c 'import json,sys; raw=sys.stdin.read(); print(json.dumps(json.JSONDecoder().raw_decode(raw[raw.index("{"):])[0], ensure_ascii=False, indent=1))'
 ```
+
+`raw_decode` здесь не прихоть: он отрезает и приглашение `sudo` перед JSON, и приписку
+ssh после него.
 
 В `state.json` лежат подписчики и последнее известное значение по каждой паре (АЗС, топливо).
 Удалять файл без нужды не стоит: после этого бот заново снимает базовую линию.
