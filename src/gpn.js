@@ -7,6 +7,17 @@ const MAP_URL = 'https://gpnbonus.ru/fuel/refuel-map';
 const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
+/**
+ * Запасные группы топлива — на случай, если ответ пришёл без oilProductGroups.
+ * Состав совпадает с тем, что отдаёт API: DT объединяет все «обычные» дизели,
+ * включая сезонные (летнее/зимнее/межсезонное).
+ */
+const FALLBACK_GROUPS = {
+  DT: { title: 'ДТ', fuels: [1, 372, 374, 461, 512] },
+  GDT: { title: 'G-ДТ', fuels: [424] },
+  DTO: { title: 'ДТ Опти', fuels: [541] },
+};
+
 /** Запасной справочник — используется, если ответ пришёл без oilProducts. */
 const FALLBACK_FUELS = {
   1: 'ДТа', 12: '95', 21: '98', 62: '92', 372: 'ДТл', 373: 'ГАЗ',
@@ -71,6 +82,40 @@ function normalizeStation(raw) {
     open: raw.open === true,
     oils,
     hasOilData: oils.size > 0,
+  };
+}
+
+/** Название для записи из TRACKED_FUELS — числового id или кода группы. */
+export function fuelKeyTitle(snapshot, key) {
+  if (typeof key === 'number') return snapshot.fuels.get(key) ?? String(key);
+  return snapshot.groups?.get(key)?.title ?? String(key);
+}
+
+/**
+ * Приводит запись из TRACKED_FUELS к состоянию на конкретной АЗС.
+ * Для группы (например DT) наличие — это «есть хотя бы один из входящих видов»:
+ * так сезонная замена летнего дизеля на зимний не читается как «топливо кончилось».
+ * Возвращает null, если АЗС не торгует ничем из запрошенного.
+ */
+export function resolveFuel(snapshot, station, key) {
+  const ids =
+    typeof key === 'number' ? [key] : (snapshot.groups?.get(key)?.fuels ?? []);
+
+  const members = ids
+    .filter((id) => station.oils.has(id))
+    .map((id) => ({
+      id,
+      title: snapshot.fuels.get(id) ?? String(id),
+      value: station.oils.get(id) === true,
+    }));
+  if (members.length === 0) return null;
+
+  return {
+    key,
+    title: fuelKeyTitle(snapshot, key),
+    value: members.some((m) => m.value),
+    members,
+    isGroup: typeof key !== 'number',
   };
 }
 
@@ -142,8 +187,22 @@ export async function fetchStations({ timeoutMs = 30_000, retries = 2 } = {}) {
         if (!fuels.has(Number(id))) fuels.set(Number(id), title);
       }
 
-      log.debug(`Получено АЗС: ${stations.size}, видов топлива: ${fuels.size}`);
-      return { stations, fuels, fetchedAt: Date.now() };
+      const groups = new Map();
+      for (const g of Array.isArray(data.oilProductGroups) ? data.oilProductGroups : []) {
+        const id = String(g?.id ?? '').trim().toUpperCase();
+        if (!id || !Array.isArray(g.fuels)) continue;
+        groups.set(id, {
+          id,
+          title: normalizeFuelTitle(g.shortTitle || g.title) || id,
+          fuels: g.fuels.filter((f) => Number.isInteger(f)),
+        });
+      }
+      for (const [id, g] of Object.entries(FALLBACK_GROUPS)) {
+        if (!groups.has(id)) groups.set(id, { id, title: g.title, fuels: [...g.fuels] });
+      }
+
+      log.debug(`Получено АЗС: ${stations.size}, видов топлива: ${fuels.size}, групп: ${groups.size}`);
+      return { stations, fuels, groups, fetchedAt: Date.now() };
     } catch (err) {
       lastError = err;
       log.warn(`Запрос к API не удался: ${err.message}`);

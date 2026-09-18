@@ -28,7 +28,7 @@ async function main() {
   await setupCommands(bot);
   log.info(`Бот @${bot.botInfo.username} запущен`);
   log.info(
-    `Отслеживаем АЗС: ${config.stationIds.join(', ')} | топливо: ${config.fuelIds.join(', ')} | ` +
+    `Отслеживаем АЗС: ${config.stationIds.join(', ')} | топливо: ${config.fuelKeys.join(', ')} | ` +
       `опрос раз в ${config.pollIntervalSec} с (±${config.pollJitterPct}%)`,
   );
 

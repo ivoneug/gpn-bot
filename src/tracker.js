@@ -1,5 +1,5 @@
 import { config, staleAlertMs } from './config.js';
-import { fetchStations } from './gpn.js';
+import { fetchStations, resolveFuel } from './gpn.js';
 import { getFuelState, getState, save } from './state.js';
 import { log } from './logger.js';
 
@@ -15,6 +15,7 @@ export class Tracker {
     this.timer = null;
     this.stopped = false;
     this.warnedMissing = new Set();
+    this.warnedMissingGroup = new Set();
     this.failures = 0;
     this.staleNotified = false;
     this.startedAt = Date.now();
@@ -107,18 +108,27 @@ export class Tracker {
         continue;
       }
 
-      for (const fuelId of config.fuelIds) {
-        // АЗС просто не торгует этим топливом — не наш случай.
-        if (!station.oils.has(fuelId)) continue;
+      for (const fuelKey of config.fuelKeys) {
+        if (typeof fuelKey === 'string' && !snapshot.groups?.has(fuelKey)) {
+          if (!this.warnedMissingGroup.has(fuelKey)) {
+            this.warnedMissingGroup.add(fuelKey);
+            log.warn(`Группы топлива ${fuelKey} нет в справочнике API — проверь TRACKED_FUELS`);
+          }
+          continue;
+        }
 
-        const value = station.oils.get(fuelId);
-        const fs = getFuelState(stationId, fuelId);
+        // АЗС просто не торгует этим топливом (ни одним видом из группы) — не наш случай.
+        const resolved = resolveFuel(snapshot, station, fuelKey);
+        if (!resolved) continue;
+
+        const value = resolved.value;
+        const fs = getFuelState(stationId, fuelKey);
 
         // Первый в жизни опрос по этой паре: запоминаем как базовую линию, не шумим.
         if (fs.confirmed === null) {
           fs.confirmed = value;
           fs.changedAt = now;
-          log.info(`Базовое состояние: АЗС ${stationId} / топливо ${fuelId} = ${value}`);
+          log.info(`Базовое состояние: АЗС ${stationId} / топливо ${fuelKey} = ${value}`);
           continue;
         }
 
@@ -134,8 +144,11 @@ export class Tracker {
 
         events.push({
           station,
-          fuelId,
-          fuelTitle: snapshot.fuels.get(fuelId) ?? String(fuelId),
+          fuelKey,
+          fuelTitle: resolved.title,
+          // Какие именно виды сейчас в наличии — для группы это уточняет сообщение.
+          available: resolved.members.filter((m) => m.value).map((m) => m.title),
+          isGroup: resolved.isGroup,
           direction,
           at: now,
         });

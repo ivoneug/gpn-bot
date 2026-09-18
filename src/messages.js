@@ -1,5 +1,5 @@
 import { config } from './config.js';
-import { stationMapUrl, stationTitle } from './gpn.js';
+import { fuelKeyTitle, resolveFuel, stationMapUrl, stationTitle } from './gpn.js';
 import { getFuelState, getState } from './state.js';
 
 export function esc(s) {
@@ -21,6 +21,12 @@ function agoRu(ts) {
   return `${Math.floor(h / 24)} дн назад`;
 }
 
+/** Для группы дописывает, какой именно вид появился: «ДТ (ДТз)». */
+function kind(event) {
+  if (!event.isGroup || !event.available?.length) return '';
+  return ` <i>(${esc(event.available.join(', '))})</i>`;
+}
+
 /** Одно сообщение на весь пакет изменений из одного опроса. */
 export function formatEvents(events) {
   const appeared = events.filter((e) => e.direction === 'appeared');
@@ -31,7 +37,7 @@ export function formatEvents(events) {
     lines.push('⛽️ <b>Топливо появилось</b>');
     for (const e of appeared) {
       lines.push(
-        `• <b>${esc(e.fuelTitle)}</b> — <a href="${stationMapUrl(e.station)}">${esc(stationTitle(e.station))}</a>`,
+        `• <b>${esc(e.fuelTitle)}</b>${kind(e)} — <a href="${stationMapUrl(e.station)}">${esc(stationTitle(e.station))}</a>`,
       );
     }
   }
@@ -75,16 +81,21 @@ export function formatStatus(snapshot) {
       continue;
     }
 
-    for (const fuelId of config.fuelIds) {
-      const title = snapshot.fuels.get(fuelId) ?? String(fuelId);
-      if (!station.oils.has(fuelId)) {
-        lines.push(`  ▫️ ${esc(title)} — не продаётся на этой АЗС`);
+    for (const fuelKey of config.fuelKeys) {
+      const resolved = resolveFuel(snapshot, station, fuelKey);
+      if (!resolved) {
+        lines.push(`  ▫️ ${esc(fuelKeyTitle(snapshot, fuelKey))} — не продаётся на этой АЗС`);
         continue;
       }
-      const live = station.oils.get(fuelId);
-      const fs = getFuelState(stationId, fuelId);
+      const fs = getFuelState(stationId, fuelKey);
       const since = fs.changedAt ? ` <i>(${agoRu(fs.changedAt)})</i>` : '';
-      lines.push(`  ${live ? '✅' : '❌'} <b>${esc(title)}</b> — ${live ? 'есть' : 'нет'}${since}`);
+      let line = `  ${resolved.value ? '✅' : '❌'} <b>${esc(resolved.title)}</b> — ${resolved.value ? 'есть' : 'нет'}${since}`;
+      // У группы уточняем, какой именно вид залит: «ДТ — есть (ДТз)».
+      if (resolved.isGroup && resolved.value) {
+        const avail = resolved.members.filter((m) => m.value).map((m) => m.title);
+        if (avail.length > 0) line += ` <i>(${esc(avail.join(', '))})</i>`;
+      }
+      lines.push(line);
     }
     lines.push('');
   }

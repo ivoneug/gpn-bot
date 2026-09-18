@@ -23,6 +23,27 @@ function bool(name, def) {
   return ['1', 'true', 'yes', 'on', 'да'].includes(raw.trim().toLowerCase());
 }
 
+/**
+ * Разбирает TRACKED_FUELS: числовой id топлива либо код группы из справочника
+ * API (DT — дизель, GDT, DTO). Группа считается доступной, если есть хотя бы
+ * один входящий в неё вид.
+ */
+function fuelKeyList(name, def) {
+  const raw = process.env[name];
+  const src = raw === undefined || raw.trim() === '' ? def : raw;
+  const out = [];
+  for (const piece of src.split(',').map((s) => s.trim()).filter(Boolean)) {
+    if (/^\d+$/.test(piece)) {
+      out.push(Number(piece));
+    } else if (/^[A-Za-z][A-Za-z0-9_-]*$/.test(piece)) {
+      out.push(piece.toUpperCase());
+    } else {
+      throw new Error(`${name}: "${piece}" — не id топлива и не код группы`);
+    }
+  }
+  return [...new Set(out)];
+}
+
 function idList(name, def) {
   const raw = process.env[name];
   const src = raw === undefined || raw.trim() === '' ? def : raw;
@@ -40,14 +61,16 @@ function idList(name, def) {
 
 // АЗС по умолчанию — Краснодар: 885 = Селезнева, 197/2; 886 = Уральская, 194/1;
 // 894 и 1078 = трасса Краснодар-Кропоткин, 3-й и 4-й км (АЗС №10 и №46).
-// Топливо по умолчанию — 62 = АИ-92, 12 = АИ-95, 421 = G-95 (брендированный АИ-95),
-// 372 = ДТл. Дизель сезонный: зимой АЗС переходят на ДТз (374) или ДТм (461).
-// Справочник id топлива целиком см. в RESEARCH.md.
+// Топливо по умолчанию — 62 = АИ-92, 12 = АИ-95, 421 = G-95 (брендированный АИ-95)
+// и группа DT: она покрывает все обычные дизели разом (летний, зимний,
+// межсезонный, арктический, просто ДТ), поэтому сезонная пересортица на АЗС
+// не выглядит как «дизель кончился».
+// Справочник id топлива и состав групп см. в RESEARCH.md.
 function build() {
   return {
   botToken: req('BOT_TOKEN'),
   stationIds: idList('TRACKED_STATIONS', '885,886,894,1078'),
-  fuelIds: idList('TRACKED_FUELS', '62,12,421,372'),
+  fuelKeys: fuelKeyList('TRACKED_FUELS', '62,12,421,DT'),
 
   pollIntervalSec: num('POLL_INTERVAL_SEC', 420, { min: 60, max: 86400 }),
   pollJitterPct: num('POLL_JITTER_PCT', 10, { min: 0, max: 50 }),
