@@ -40,13 +40,14 @@ function idList(name, def) {
 
 // АЗС по умолчанию — Краснодар: 885 = Селезнева, 197/2; 886 = Уральская, 194/1;
 // 894 и 1078 = трасса Краснодар-Кропоткин, 3-й и 4-й км (АЗС №10 и №46).
-// Топливо по умолчанию — 62 = АИ-92, 12 = АИ-95, 421 = G-95 (брендированный АИ-95).
+// Топливо по умолчанию — 62 = АИ-92, 12 = АИ-95, 421 = G-95 (брендированный АИ-95),
+// 372 = ДТл. Дизель сезонный: зимой АЗС переходят на ДТз (374) или ДТм (461).
 // Справочник id топлива целиком см. в RESEARCH.md.
 function build() {
   return {
   botToken: req('BOT_TOKEN'),
   stationIds: idList('TRACKED_STATIONS', '885,886,894,1078'),
-  fuelIds: idList('TRACKED_FUELS', '62,12,421'),
+  fuelIds: idList('TRACKED_FUELS', '62,12,421,372'),
 
   pollIntervalSec: num('POLL_INTERVAL_SEC', 420, { min: 60, max: 86400 }),
   pollJitterPct: num('POLL_JITTER_PCT', 10, { min: 0, max: 50 }),
